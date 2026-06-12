@@ -1,0 +1,84 @@
+@startuml Order Creation Sequence
+autonumber
+skinparam boxpadding 10
+skinparam participantpadding 10
+
+title Sequence Diagram - Single vs. Bulk Order Processing
+
+actor Client as "Client / OPS"
+participant API as "Express Router\n& Controller"
+participant OrderSvc as "OrderService"
+participant BulkSvc as "BulkOrderService"
+database DB as "PostgreSQL"
+database Redis as "Redis\n(BullMQ)"
+participant Worker as "BulkOrderWorker"
+participant Factory as "CourierFactory"
+participant Adapter as "CourierAdapter"
+participant PartnerAPI as "Courier UAT API"
+
+== Application Startup ==
+[-> Factory : registerCourierAdapters()
+activate Factory
+Factory -> DB : Query active CourierProviders
+Factory <-- DB : List of CourierProviders
+loop For each active CourierProvider
+  create Adapter
+  Factory -> Adapter : Instantiate(provider)
+  Factory -> Factory : Register adapter in Map
+end
+deactivate Factory
+
+== Single Order Creation Flow ==
+Client -> API : POST /api/v1/orders
+API -> OrderSvc : createOrder(payload)
+activate OrderSvc
+
+OrderSvc -> Factory : getAdapter(courier_partner)
+activate Factory
+OrderSvc <-- Factory : Retrieve pre-registered singleton ICourierAdapter
+deactivate Factory
+
+OrderSvc -> DB : Persist Order (Status: CREATED, request payload)
+OrderSvc -> Adapter : createOrder(req)
+activate Adapter
+Adapter -> PartnerAPI : POST /shipment (with auth headers)
+Adapter <-- PartnerAPI : Response (AWB, status details)
+OrderSvc <-- Adapter : { awbNumber, courierOrderId, rawResponse }
+deactivate Adapter
+
+alt Success Flow
+  OrderSvc -> DB : Update Order (Status: CREATED, AWB, response payload)
+  OrderSvc -> DB : Append Tracking Event (ORDER PLACED)
+  API <-- OrderSvc : Return Order
+  Client <-- API : 201 Created (AWB details)
+else Failure Flow (downstream error)
+  OrderSvc -> DB : Update Order (Status: FAILED, failureReason)
+  API <-- OrderSvc : Throw error
+  Client <-- API : Error Response (e.g. 502 Bad Gateway)
+end
+deactivate OrderSvc
+
+== Bulk Order Creation Flow ==
+Client -> API : POST /api/v1/orders/bulk
+API -> BulkSvc : createBulkOrders(payload)
+activate BulkSvc
+BulkSvc -> DB : Save BatchJob (Status: PROCESSING)
+loop For each order in request
+  BulkSvc -> Redis : Enqueue order job payload
+end
+BulkSvc --> API : Batch ID
+Client <-- API : 202 Accepted (Batch ID)
+deactivate BulkSvc
+
+... Background Processing ...
+Redis -> Worker : Poll / Pull job
+activate Worker
+Worker -> OrderSvc : createOrder(singleOrderPayload)
+activate OrderSvc
+OrderSvc -> DB : Process order... (Same as Single Flow steps 10-23)
+OrderSvc --> Worker : success / failure
+deactivate OrderSvc
+Worker -> DB : Increment success/failure counts, update Batch status
+deactivate Worker
+
+@enduml

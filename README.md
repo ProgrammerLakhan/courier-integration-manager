@@ -1,0 +1,267 @@
+# Multi-Courier Integration Platform
+
+A production-grade backend service providing a **unified, courier-agnostic REST API** for logistics operations. Integrates with multiple courier partners (UrbaneBolt, MockCourier) via a pluggable **Strategy + Factory** pattern.
+
+---
+
+## System Architecture
+
+### 1. Architecture Flow
+![Architecture Flow](./docs/architecture_flow.png)
+
+### 2. Order Creation Sequence (Single vs. Bulk)
+![Order Creation Sequence](./docs/order_creation_sequence.png)
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Docker 20+
+- Node.js 20 LTS (for local dev without Docker)
+
+### 1. Clone and configure
+```bash
+git clone <repo-url>
+cd courier-integration-manager
+cp .env.example .env       # edit values if needed (UAT credentials are pre-filled)
+```
+
+### 2. Start infrastructure (PostgreSQL + Redis)
+```bash
+# Start only the infra services
+docker run -d --name courier_postgres \
+  -e POSTGRES_DB=courier_db -e POSTGRES_USER=courier_user -e POSTGRES_PASSWORD=courier_pass \
+  -p 5432:5432 postgres:16-alpine
+
+docker run -d --name courier_redis -p 6379:6379 redis:7-alpine
+```
+
+### 3. Install dependencies and run migrations + seed
+```bash
+npm install
+npm run migration:run    # creates all 6 tables
+npm run seed             # seeds ADMIN user + courier providers
+```
+
+### 4. Start the development server
+```bash
+npm run dev
+```
+
+Server starts on `http://localhost:3000`. Check `GET /health`.
+
+---
+
+## Testing
+
+An E2E integration test suite is included to verify all routes, authorization levels, rate limiting, and courier integrations (both Mock and UrbaneBolt).
+
+### Prerequisites for E2E Tests
+1. Make sure your local infrastructure services (PostgreSQL and Redis) are running.
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+### Running the E2E Integration Tests
+In a separate terminal, execute:
+```bash
+npm run test:e2e
+```
+
+This verifies:
+- Health check validation
+- Authentication and RBAC (restricted register, admin, and ops access)
+- Order creation (Mock Courier and UrbaneBolt UAT API integration)
+- Tracking and cancellation flows
+- Database configuration encryption/decryption checks
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | HTTP server port |
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_USER` | `courier_user` | PostgreSQL user |
+| `DB_PASSWORD` | `courier_pass` | PostgreSQL password |
+| `DB_NAME` | `courier_db` | PostgreSQL database name |
+| `REDIS_HOST` | `localhost` | Redis host |
+| `REDIS_PORT` | `6379` | Redis port |
+| `JWT_ACCESS_SECRET` | *(required in prod)* | JWT signing secret |
+| `JWT_REFRESH_SECRET` | *(required in prod)* | Refresh token signing secret |
+| `JWT_ACCESS_EXPIRES_IN` | `15m` | Access token lifetime |
+| `JWT_REFRESH_EXPIRES_IN` | `7d` | Refresh token lifetime |
+| `ADMIN_EMAIL` | `admin@courier.com` | Seeded admin email |
+| `ADMIN_PASSWORD` | `Admin@123456` | Seeded admin password |
+| `LOG_LEVEL` | `info` | Winston log level (`debug`/`info`/`warn`/`error`) |
+| `LOG_DIR` | `logs` | Directory for rotated log files |
+| `BULLMQ_CONCURRENCY` | `10` | Parallel workers for bulk orders |
+| `RATE_LIMIT_MAX` | `100` | Global requests per window |
+| `RATE_LIMIT_WINDOW_MS` | `900000` | Global rate limit window (15 min) |
+| `AUTH_RATE_LIMIT_MAX` | `10` | Auth endpoint requests per window |
+| `COURIER_RATE_LIMIT_MAX` | `60` | Courier APIs requests per window |
+| `COURIER_RATE_LIMIT_WINDOW_MS` | `60000` | Courier rate limit window (1 min) |
+| `URBANEBOLT_BASE_URL` | `https://uat.urbanebolt.in/api/v1` | UrbaneBolt base URL |
+| `URBANEBOLT_USERNAME` | `info@urbanebolt.com` | UrbaneBolt credentials |
+| `URBANEBOLT_PASSWORD` | `EKIcygsLVV5RCtPZ` | UrbaneBolt credentials |
+| `URBANEBOLT_CUSTOMER_CODE` | `UEBCUS0008` | UrbaneBolt account code |
+
+---
+
+## API Overview
+
+### Authentication
+All `/api/v1/orders/*` and `/api/v1/batches/*` endpoints require:
+```
+Authorization: Bearer <access_token>
+```
+
+### Auth Endpoints
+```
+POST /api/v1/auth/register     Register a new user  [ADMIN]
+POST /api/v1/auth/login        Get access + refresh tokens
+POST /api/v1/auth/refresh      Exchange refresh token for new access token
+POST /api/v1/auth/logout       Revoke refresh token
+```
+
+### Order Endpoints
+```
+POST   /api/v1/orders                     Create a single order
+GET    /api/v1/orders/:id/track           Track a shipment
+POST   /api/v1/orders/:id/cancel          Cancel a shipment  [OPS, ADMIN]
+GET    /api/v1/orders/partner/:code       Get orders by courier partner (paginated, sorted, filtered)
+POST   /api/v1/orders/bulk                Bulk create up to 100 orders  [OPS, ADMIN]
+GET    /api/v1/batches/:batch_id          Poll bulk job status  [OPS, ADMIN]
+```
+
+### RBAC Roles
+| Role | Capabilities |
+|------|-------------|
+| `ADMIN` | All operations |
+| `OPS` | Create, track, cancel, bulk, view orders by partner |
+| `CLIENT` | Create orders, track own orders, view own orders by partner |
+
+---
+
+## Supported Couriers
+
+| Code | Name | Notes |
+|------|------|-------|
+| `urbanebolt` | UrbaneBolt | UAT environment, token-based auth |
+| `mock` | Mock Courier | For testing — always succeeds. Use `FAIL_` prefix in order_id to simulate failure |
+
+---
+
+## How to Add a New Courier
+
+1. **Define the config interface** in `src/database/entities/CourierProvider.entity.ts`:
+```typescript
+export interface MockCourierConfig {
+  authType: CourierAuthType.NONE;
+  authEndpoint?: null;
+  authCredentials?: null;
+}
+```
+
+2. **Create the adapter** in `src/couriers/<name>/<name>.adapter.ts` implementing `ICourierAdapter`:
+```typescript
+export class MockCourierAdapter implements ICourierAdapter {
+  readonly courierCode = 'mock';
+
+  async createOrder(req: CreateOrderRequest): Promise<{
+    courierOrderId: string;
+    awbNumber: string;
+    rawResponse: Record<string, unknown>;
+  }> {
+    // Generate simulated AWB and Order ID
+    const awb = `MOCK${uuidv4().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+    const courierOrderId = `MCK-${Date.now()}`;
+
+    return {
+      courierOrderId,
+      awbNumber: awb,
+      rawResponse: {
+        status: 'SUCCESS',
+        order_id: courierOrderId,
+        awb,
+        message: 'Shipment created successfully',
+        timestamp: new Date().toISOString(),
+      },
+    };
+  }
+
+  async trackOrder(awbNumber: string)  { /* ... */ }
+  async cancelOrder(awbNumber: string) { /* ... */ }
+}
+```
+
+3. **Register it** in `src/couriers/register-adapters.ts` inside the switch statement:
+```typescript
+case 'mock':
+  CourierFactory.register(new MockCourierAdapter());
+  break;
+```
+
+4. **Insert/Seed the provider row**:
+Update your database seed script (`src/database/seeds/seed.ts`) to write the configuration object directly. The `courier_config` column is encrypted transparently on write using TypeORM value transformers:
+```typescript
+const mockData = {
+  code: 'mock',
+  displayName: 'Mock Courier (Testing)',
+  isActive: true,
+  baseUrl: 'http://mock-courier.internal',
+  courierConfig: {
+    authType: CourierAuthType.NONE,
+  },
+  timeoutMs: 5000,
+  maxRetries: 1,
+  retryBackoffMs: 500,
+  retryBackoffMultiplier: 1.5,
+  maxBackoffMs: 5000,
+};
+await repo.save(repo.create(mockData));
+```
+
+**Zero other changes required** — no controller, route, service, or DTO modifications.
+
+---
+
+## Logs
+
+Logs are written to the `logs/` directory with daily rotation:
+- `logs/app-YYYY-MM-DD.log` — all levels, retained 14 days, gzip compressed
+- `logs/error-YYYY-MM-DD.log` — errors only, retained 30 days
+
+Every log line includes `requestId`, `userId`, `orderId`, `courierPartner` automatically via `AsyncLocalStorage`.
+
+---
+
+## Project Structure
+
+```
+src/
+├── config/               # Env-driven config
+├── database/
+│   ├── entities/         # TypeORM entities (6 tables)
+│   ├── migrations/       # Schema migrations
+│   └── seeds/            # Seed script
+├── couriers/
+│   ├── interfaces/       # ICourierAdapter + DTOs
+│   ├── factory.ts        # CourierFactory (Strategy + Factory)
+│   ├── register-adapters.ts
+│   ├── urbanebolt/       # UrbaneBolt adapter + token manager
+│   └── mock/             # MockCourier adapter
+├── modules/
+│   ├── auth/             # JWT auth, RBAC, AuthService
+│   └── orders/           # OrderService, BulkOrderService, BullMQ worker
+└── shared/
+    ├── context/          # RequestContext (AsyncLocalStorage)
+    ├── errors/           # AppError, CourierError, error codes
+    ├── http/             # Axios factory (retry + backoff)
+    ├── logger/           # Winston + daily-rotate-file
+    └── middleware/       # errorHandler, rateLimiter, requestLogger
+```

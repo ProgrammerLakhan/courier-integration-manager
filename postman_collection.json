@@ -1,0 +1,287 @@
+{
+  "info": {
+    "name": "Multi-Courier Integration Platform",
+    "description": "Production-grade courier logistics API. Import into Postman, set the {{base_url}} variable to http://localhost:3000, then run 'Login' first to auto-populate the access_token variable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",     "value": "http://localhost:3000" },
+    { "key": "access_token", "value": "" },
+    { "key": "order_id",     "value": "" },
+    { "key": "batch_id",     "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health",
+            "description": "No auth required. Used by Docker HEALTHCHECK."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/register",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ops@courier.com\",\n  \"password\": \"Ops@123456\",\n  \"role\": \"OPS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login (Admin) — sets access_token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.tokens) {",
+                  "  pm.collectionVariables.set('access_token', json.data.tokens.accessToken);",
+                  "  pm.collectionVariables.set('refresh_token', json.data.tokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@courier.com\",\n  \"password\": \"Admin@123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/refresh",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/logout",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order (Mock Courier)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.order_id) {",
+                  "  pm.collectionVariables.set('order_id', json.data.order_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"ORD-{{$randomInt}}\",\n  \"courier_partner\": \"mock\",\n  \"service_type\": \"SDD\",\n  \"payment_mode\": \"PREPAID\",\n  \"declared_value\": 1500,\n  \"collectable_value\": 0,\n  \"item_description\": \"Electronics\",\n  \"item_quantity\": 1,\n  \"weight\": 0.5,\n  \"dimensions\": { \"length\": 20, \"breadth\": 15, \"height\": 10 },\n  \"invoice\": { \"number\": \"INV-001\", \"date\": \"2025-01-15\", \"value\": 1500 },\n  \"shipper\": {\n    \"name\": \"Acme Store\",\n    \"email\": \"store@acme.com\",\n    \"mobile\": \"9876543210\",\n    \"address\": \"123 MG Road\",\n    \"address_type\": \"COMMERCIAL\",\n    \"city\": \"Mumbai\",\n    \"state\": \"Maharashtra\",\n    \"pincode\": \"400001\",\n    \"country\": \"India\"\n  },\n  \"consignee\": {\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"mobile\": \"9123456789\",\n    \"address\": \"456 Park Street\",\n    \"address_type\": \"RESIDENTIAL\",\n    \"city\": \"Delhi\",\n    \"state\": \"Delhi\",\n    \"pincode\": \"110001\",\n    \"country\": \"India\"\n  },\n  \"return_address\": {\n    \"name\": \"Acme Returns\",\n    \"email\": \"returns@acme.com\",\n    \"mobile\": \"9876543210\",\n    \"address\": \"123 MG Road\",\n    \"address_type\": \"COMMERCIAL\",\n    \"city\": \"Mumbai\",\n    \"state\": \"Maharashtra\",\n    \"pincode\": \"400001\",\n    \"country\": \"India\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Order (UrbaneBolt UAT)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"UB-ORD-{{$randomInt}}\",\n  \"courier_partner\": \"urbanebolt\",\n  \"service_type\": \"SDD\",\n  \"payment_mode\": \"COD\",\n  \"declared_value\": 2000,\n  \"collectable_value\": 2000,\n  \"item_description\": \"Clothing\",\n  \"item_quantity\": 2,\n  \"weight\": 1.2,\n  \"dimensions\": { \"length\": 30, \"breadth\": 25, \"height\": 5 },\n  \"invoice\": { \"number\": \"INV-UB-001\", \"date\": \"2025-01-15\", \"value\": 2000 },\n  \"shipper\": {\n    \"name\": \"Fashion Hub\",\n    \"email\": \"ship@fashionhub.com\",\n    \"mobile\": \"9800000001\",\n    \"address\": \"Plot 7 Andheri East\",\n    \"address_type\": \"COMMERCIAL\",\n    \"city\": \"Mumbai\",\n    \"state\": \"Maharashtra\",\n    \"pincode\": \"400069\",\n    \"country\": \"India\"\n  },\n  \"consignee\": {\n    \"name\": \"Priya Sharma\",\n    \"email\": \"priya@example.com\",\n    \"mobile\": \"9900000002\",\n    \"address\": \"22 Lajpat Nagar\",\n    \"address_type\": \"RESIDENTIAL\",\n    \"city\": \"New Delhi\",\n    \"state\": \"Delhi\",\n    \"pincode\": \"110024\",\n    \"country\": \"India\"\n  },\n  \"return_address\": {\n    \"name\": \"Fashion Hub Returns\",\n    \"email\": \"returns@fashionhub.com\",\n    \"mobile\": \"9800000001\",\n    \"address\": \"Plot 7 Andheri East\",\n    \"address_type\": \"COMMERCIAL\",\n    \"city\": \"Mumbai\",\n    \"state\": \"Maharashtra\",\n    \"pincode\": \"400069\",\n    \"country\": \"India\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Track Order",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}/track",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Orders by Courier Partner",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/orders/partner/mock?page=1&limit=10&status=CANCELLED&sortBy=updated_at&sortOrder=DESC",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}/cancel",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer requested cancellation\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Bulk Create Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.batchId) {",
+                  "  pm.collectionVariables.set('batch_id', json.data.batchId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders/bulk",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orders\": [\n    {\n      \"order_id\": \"BULK-001\",\n      \"courier_partner\": \"mock\",\n      \"service_type\": \"NDD\",\n      \"payment_mode\": \"PREPAID\",\n      \"declared_value\": 500,\n      \"collectable_value\": 0,\n      \"item_description\": \"Books\",\n      \"item_quantity\": 3,\n      \"weight\": 1.5,\n      \"dimensions\": { \"length\": 25, \"breadth\": 20, \"height\": 8 },\n      \"invoice\": { \"number\": \"INV-B001\", \"date\": \"2025-01-15\", \"value\": 500 },\n      \"shipper\": { \"name\": \"BookStore\", \"email\": \"ship@books.com\", \"mobile\": \"9100000001\", \"address\": \"1 Library Lane\", \"address_type\": \"COMMERCIAL\", \"city\": \"Pune\", \"state\": \"Maharashtra\", \"pincode\": \"411001\", \"country\": \"India\" },\n      \"consignee\": { \"name\": \"Reader A\", \"email\": \"reader@example.com\", \"mobile\": \"9200000001\", \"address\": \"5 Knowledge Park\", \"address_type\": \"RESIDENTIAL\", \"city\": \"Bangalore\", \"state\": \"Karnataka\", \"pincode\": \"560001\", \"country\": \"India\" },\n      \"return_address\": { \"name\": \"BookStore Returns\", \"email\": \"returns@books.com\", \"mobile\": \"9100000001\", \"address\": \"1 Library Lane\", \"address_type\": \"COMMERCIAL\", \"city\": \"Pune\", \"state\": \"Maharashtra\", \"pincode\": \"411001\", \"country\": \"India\" }\n    },\n    {\n      \"order_id\": \"BULK-002-INVALID\",\n      \"courier_partner\": \"mock\",\n      \"payment_mode\": \"INVALID_MODE\"\n    }\n  ]\n}"
+            },
+            "description": "Contains 1 valid order + 1 invalid order (wrong payment_mode). The invalid one is rejected immediately in the response. The valid one is processed asynchronously."
+          }
+        },
+        {
+          "name": "Get Batch Status",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/batches/{{batch_id}}",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Error Scenarios",
+      "item": [
+        {
+          "name": "Duplicate Order (409)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"BULK-001\",\n  \"courier_partner\": \"mock\",\n  \"service_type\": \"SDD\",\n  \"payment_mode\": \"PREPAID\",\n  \"declared_value\": 100,\n  \"collectable_value\": 0,\n  \"item_description\": \"Test\",\n  \"item_quantity\": 1,\n  \"weight\": 0.1,\n  \"dimensions\": { \"length\": 5, \"breadth\": 5, \"height\": 5 },\n  \"invoice\": { \"number\": \"INV-DUP\", \"date\": \"2025-01-15\", \"value\": 100 },\n  \"shipper\": { \"name\": \"S\", \"email\": \"s@s.com\", \"mobile\": \"9000000000\", \"address\": \"A\", \"address_type\": \"COMMERCIAL\", \"city\": \"C\", \"state\": \"S\", \"pincode\": \"100000\", \"country\": \"India\" },\n  \"consignee\": { \"name\": \"C\", \"email\": \"c@c.com\", \"mobile\": \"9000000001\", \"address\": \"B\", \"address_type\": \"RESIDENTIAL\", \"city\": \"D\", \"state\": \"T\", \"pincode\": \"200000\", \"country\": \"India\" },\n  \"return_address\": { \"name\": \"R\", \"email\": \"r@r.com\", \"mobile\": \"9000000000\", \"address\": \"A\", \"address_type\": \"COMMERCIAL\", \"city\": \"C\", \"state\": \"S\", \"pincode\": \"100000\", \"country\": \"India\" }\n}",
+              "description": "Run this AFTER the bulk create — BULK-001 already exists → 409"
+            }
+          }
+        },
+        {
+          "name": "Unknown Courier (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"ERR-COURIER-001\",\n  \"courier_partner\": \"invalid_courier\",\n  \"service_type\": \"SDD\",\n  \"payment_mode\": \"PREPAID\",\n  \"declared_value\": 100,\n  \"collectable_value\": 0,\n  \"item_description\": \"Test\",\n  \"item_quantity\": 1,\n  \"weight\": 0.1,\n  \"dimensions\": { \"length\": 5, \"breadth\": 5, \"height\": 5 },\n  \"invoice\": { \"number\": \"INV-ERR\", \"date\": \"2025-01-15\", \"value\": 100 },\n  \"shipper\": { \"name\": \"S\", \"email\": \"s@s.com\", \"mobile\": \"9000000000\", \"address\": \"A\", \"address_type\": \"COMMERCIAL\", \"city\": \"C\", \"state\": \"S\", \"pincode\": \"100000\", \"country\": \"India\" },\n  \"consignee\": { \"name\": \"C\", \"email\": \"c@c.com\", \"mobile\": \"9000000001\", \"address\": \"B\", \"address_type\": \"RESIDENTIAL\", \"city\": \"D\", \"state\": \"T\", \"pincode\": \"200000\", \"country\": \"India\" },\n  \"return_address\": { \"name\": \"R\", \"email\": \"r@r.com\", \"mobile\": \"9000000000\", \"address\": \"A\", \"address_type\": \"COMMERCIAL\", \"city\": \"C\", \"state\": \"S\", \"pincode\": \"100000\", \"country\": \"India\" }\n}"
+            }
+          }
+        },
+        {
+          "name": "Unauthenticated Request (401)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/orders/some-id/track"
+          }
+        },
+        {
+          "name": "Forbidden — CLIENT cancelling order (403)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}/cancel",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" }
+          }
+        },
+        {
+          "name": "Validation Error (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
