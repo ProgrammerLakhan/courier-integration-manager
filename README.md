@@ -148,31 +148,75 @@ GET    /api/v1/batches/:batch_id          Poll bulk job status  [OPS, ADMIN]
 
 ## How to Add a New Courier
 
-1. **Create the adapter** in `src/couriers/<name>/<name>.adapter.ts`:
+1. **Define the config interface** in `src/database/entities/CourierProvider.entity.ts`:
 ```typescript
-export class DelhiveryAdapter implements ICourierAdapter {
-  readonly courierCode = 'delhivery';
-
-  async createOrder(req: CreateOrderRequest) { /* map to Delhivery API */ }
-  async trackOrder(awbNumber: string)        { /* fetch from Delhivery */ }
-  async cancelOrder(awbNumber: string)       { /* call Delhivery cancel */ }
+export interface MockCourierConfig {
+  authType: CourierAuthType.NONE;
+  authEndpoint?: null;
+  authCredentials?: null;
 }
 ```
 
-2. **Register it** in `src/couriers/register-adapters.ts` — add one `case`:
+2. **Create the adapter** in `src/couriers/<name>/<name>.adapter.ts` implementing `ICourierAdapter`:
 ```typescript
-case 'delhivery':
-  CourierFactory.register(new DelhiveryAdapter(provider));
+export class MockCourierAdapter implements ICourierAdapter {
+  readonly courierCode = 'mock';
+
+  async createOrder(req: CreateOrderRequest): Promise<{
+    courierOrderId: string;
+    awbNumber: string;
+    rawResponse: Record<string, unknown>;
+  }> {
+    // Generate simulated AWB and Order ID
+    const awb = `MOCK${uuidv4().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+    const courierOrderId = `MCK-${Date.now()}`;
+
+    return {
+      courierOrderId,
+      awbNumber: awb,
+      rawResponse: {
+        status: 'SUCCESS',
+        order_id: courierOrderId,
+        awb,
+        message: 'Shipment created successfully',
+        timestamp: new Date().toISOString(),
+      },
+    };
+  }
+
+  async trackOrder(awbNumber: string)  { /* ... */ }
+  async cancelOrder(awbNumber: string) { /* ... */ }
+}
+```
+
+3. **Register it** in `src/couriers/register-adapters.ts` inside the switch statement:
+```typescript
+case 'mock':
+  CourierFactory.register(new MockCourierAdapter());
   break;
 ```
 
-3. **Insert the DB row** (or add to seed script):
-```sql
-INSERT INTO courier_providers (code, display_name, base_url, auth_type, auth_credentials, ...)
-VALUES ('delhivery', 'Delhivery', 'https://track.delhivery.com/api', 'API_KEY', '{"apiKey":"..."}', ...);
+4. **Insert/Seed the provider row**:
+Update your database seed script (`src/database/seeds/seed.ts`) to write the configuration object directly. The `courier_config` column is encrypted transparently on write using TypeORM value transformers:
+```typescript
+const mockData = {
+  code: 'mock',
+  displayName: 'Mock Courier (Testing)',
+  isActive: true,
+  baseUrl: 'http://mock-courier.internal',
+  courierConfig: {
+    authType: CourierAuthType.NONE,
+  },
+  timeoutMs: 5000,
+  maxRetries: 1,
+  retryBackoffMs: 500,
+  retryBackoffMultiplier: 1.5,
+  maxBackoffMs: 5000,
+};
+await repo.save(repo.create(mockData));
 ```
 
-**Zero other changes required** — no controller, route, service, or DTO changes.
+**Zero other changes required** — no controller, route, service, or DTO modifications.
 
 ---
 
