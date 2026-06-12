@@ -32,7 +32,10 @@
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/v1/auth/register",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"ops@courier.com\",\n  \"password\": \"Ops@123456\",\n  \"role\": \"OPS\"\n}"

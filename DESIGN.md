@@ -168,7 +168,7 @@ POST /api/v1/orders/bulk
 
 | Endpoint | ADMIN | OPS | CLIENT |
 |----------|-------|-----|--------|
-| Register | ✅ | ✅ | ✅ |
+| Register | ✅ | ❌ | ❌ |
 | Create order | ✅ | ✅ | ✅ |
 | Track order | ✅ | ✅ | ✅ |
 | Cancel order | ✅ | ✅ | ❌ |
@@ -187,6 +187,7 @@ Three layers, all backed by Redis (survives restarts, works across multiple inst
 | Global | All `/api/*` | 100 req / 15 min / IP |
 | Auth | `POST /auth/login`, `POST /auth/refresh` | 10 req / 15 min / IP |
 | Register | `POST /auth/register` | 5 req / 1 hour / IP |
+| Courier | All `/orders/*` and `/batches/*` | 60 req / 1 min / IP |
 
 All 429 responses use the same normalized error shape as all other errors.
 

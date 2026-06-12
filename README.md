@@ -67,6 +67,8 @@ Server starts on `http://localhost:3000`. Check `GET /health`.
 | `RATE_LIMIT_MAX` | `100` | Global requests per window |
 | `RATE_LIMIT_WINDOW_MS` | `900000` | Global rate limit window (15 min) |
 | `AUTH_RATE_LIMIT_MAX` | `10` | Auth endpoint requests per window |
+| `COURIER_RATE_LIMIT_MAX` | `60` | Courier APIs requests per window |
+| `COURIER_RATE_LIMIT_WINDOW_MS` | `60000` | Courier rate limit window (1 min) |
 | `URBANEBOLT_BASE_URL` | `https://uat.urbanebolt.in/api/v1` | UrbaneBolt base URL |
 | `URBANEBOLT_USERNAME` | `info@urbanebolt.com` | UrbaneBolt credentials |
 | `URBANEBOLT_PASSWORD` | `EKIcygsLVV5RCtPZ` | UrbaneBolt credentials |
@@ -84,7 +86,7 @@ Authorization: Bearer <access_token>
 
 ### Auth Endpoints
 ```
-POST /api/v1/auth/register     Register a new user (CLIENT role by default)
+POST /api/v1/auth/register     Register a new user  [ADMIN]
 POST /api/v1/auth/login        Get access + refresh tokens
 POST /api/v1/auth/refresh      Exchange refresh token for new access token
 POST /api/v1/auth/logout       Revoke refresh token

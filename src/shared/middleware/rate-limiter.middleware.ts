@@ -73,3 +73,21 @@ export const registerRateLimiter = rateLimit({
   handler: rateLimitHandler,
   keyGenerator: (req) => req.ip ?? 'unknown',
 });
+
+/**
+ * Courier rate limiter — applied to all write/track/cancel order endpoints.
+ * Default: 60 requests per minute per IP.
+ */
+export const courierRateLimiter = rateLimit({
+  windowMs: config.rateLimit.courier.windowMs,
+  max: config.rateLimit.courier.max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({
+    sendCommand: ((...args: string[]) => redisClient.call(args[0], ...args.slice(1))) as (
+      ...args: string[]
+    ) => Promise<RedisReply>,
+  }),
+  handler: rateLimitHandler,
+  keyGenerator: (req) => req.ip ?? 'unknown',
+});

@@ -64,6 +64,13 @@ export const config = {
         process.env.NODE_ENV === 'development' ? 10000 : 5,
       ),
     },
+    courier: {
+      windowMs: optionalInt('COURIER_RATE_LIMIT_WINDOW_MS', 60 * 1000),
+      max: optionalInt(
+        'COURIER_RATE_LIMIT_MAX',
+        process.env.NODE_ENV === 'development' ? 10000 : 60,
+      ),
+    },
   },
 
   logging: {
