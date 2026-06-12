@@ -1,5 +1,5 @@
 import { type AxiosInstance } from 'axios';
-import { type CourierProvider, OrderStatus } from '@database/entities';
+import { type CourierProvider, type UrbaneBoltConfig, OrderStatus } from '@database/entities';
 import {
   type ICourierAdapter,
   type CreateOrderRequest,
@@ -9,50 +9,52 @@ import { createCourierHttpClient } from '@shared/http.client';
 import { UrbaneBoltTokenManager } from './token-manager';
 import { RequestContext } from '@shared/context';
 import { logger } from '@shared/logger';
+import { AppError, ErrorCode } from '@shared/errors';
 
 interface UBManifestPayload {
-  customer_code: string;
-  service_type: string;
-  payment_mode: string;
-  declared_value: number;
-  collectable_value: number;
-  item_description: string;
-  item_quantity: number;
+  customerCode: string;
+  serviceType: string;
+  payMode: string;
+  declaredValue: number;
+  collectableValue: number;
+  itemDescription: string;
+  itemQuantity: number;
   weight: number;
   length: number;
   breadth: number;
   height: number;
-  invoice_number: string;
-  invoice_date: string;
-  invoice_value: number;
-  shipper_name: string;
-  shipper_email: string;
-  shipper_mobile: string;
-  shipper_address: string;
-  shipper_address_type: string;
-  shipper_city: string;
-  shipper_state: string;
-  shipper_pincode: string;
-  shipper_country: string;
-  consignee_name: string;
-  consignee_email: string;
-  consignee_mobile: string;
-  consignee_address: string;
-  consignee_address_type: string;
-  consignee_city: string;
-  consignee_state: string;
-  consignee_pincode: string;
-  consignee_country: string;
-  return_name: string;
-  return_email: string;
-  return_mobile: string;
-  return_address: string;
-  return_address_type: string;
-  return_city: string;
-  return_state: string;
-  return_pincode: string;
-  return_country: string;
-  order_id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  invoiceValue: number;
+  shprName: string;
+  shprEmail: string;
+  shprMobile: string;
+  shprAddress: string;
+  shprAddressType: string;
+  shprCity: string;
+  shprState: string;
+  shprPincode: string;
+  shprCountry: string;
+  consName: string;
+  consEmail: string;
+  consMobile: string;
+  consAddress: string;
+  consAddressType: string;
+  consCity: string;
+  consState: string;
+  consPincode: string;
+  consCountry: string;
+  rtnName: string;
+  rtnEmail: string;
+  rtnMobile: string;
+  rtnAddress: string;
+  rtnAddressType: string;
+  rtnCity: string;
+  rtnState: string;
+  rtnPincode: string;
+  rtnCountry: string;
+  orderNumber: string;
+  pieces: number;
 }
 
 const UB_STATUS_MAP: Record<string, OrderStatus> = {
@@ -89,7 +91,14 @@ export class UrbaneBoltAdapter implements ICourierAdapter {
   constructor(provider: CourierProvider) {
     this.tokenManager = new UrbaneBoltTokenManager(provider);
     this.http = createCourierHttpClient(provider, this.tokenManager);
-    this.customerCode = (provider.extraConfig?.customerCode as string) ?? 'UEBCUS0008';
+    const config = provider.courierConfig as UrbaneBoltConfig | null;
+    if (!config?.customerCode) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        "Missing required 'customerCode' in UrbaneBolt provider configuration",
+      );
+    }
+    this.customerCode = config.customerCode;
   }
 
   async createOrder(req: CreateOrderRequest): Promise<{
@@ -100,66 +109,69 @@ export class UrbaneBoltAdapter implements ICourierAdapter {
     RequestContext.set({ courierPartner: this.courierCode });
 
     const payload: UBManifestPayload = {
-      customer_code: this.customerCode,
-      service_type: req.service_type,
-      payment_mode: req.payment_mode,
-      declared_value: req.declared_value,
-      collectable_value: req.collectable_value,
-      item_description: req.item_description,
-      item_quantity: req.item_quantity,
+      customerCode: this.customerCode,
+      serviceType: req.service_type,
+      payMode: req.payment_mode,
+      declaredValue: req.declared_value,
+      collectableValue: req.collectable_value,
+      itemDescription: req.item_description,
+      itemQuantity: req.item_quantity,
       weight: req.weight,
       length: req.dimensions.length,
       breadth: req.dimensions.breadth,
       height: req.dimensions.height,
-      invoice_number: req.invoice.number,
-      invoice_date: req.invoice.date,
-      invoice_value: req.invoice.value,
-      shipper_name: req.shipper.name,
-      shipper_email: req.shipper.email,
-      shipper_mobile: req.shipper.mobile,
-      shipper_address: req.shipper.address,
-      shipper_address_type: req.shipper.address_type,
-      shipper_city: req.shipper.city,
-      shipper_state: req.shipper.state,
-      shipper_pincode: req.shipper.pincode,
-      shipper_country: req.shipper.country,
-      consignee_name: req.consignee.name,
-      consignee_email: req.consignee.email,
-      consignee_mobile: req.consignee.mobile,
-      consignee_address: req.consignee.address,
-      consignee_address_type: req.consignee.address_type,
-      consignee_city: req.consignee.city,
-      consignee_state: req.consignee.state,
-      consignee_pincode: req.consignee.pincode,
-      consignee_country: req.consignee.country,
-      return_name: req.return_address.name,
-      return_email: req.return_address.email,
-      return_mobile: req.return_address.mobile,
-      return_address: req.return_address.address,
-      return_address_type: req.return_address.address_type,
-      return_city: req.return_address.city,
-      return_state: req.return_address.state,
-      return_pincode: req.return_address.pincode,
-      return_country: req.return_address.country,
-      order_id: req.order_id,
+      invoiceNumber: req.invoice.number,
+      invoiceDate: req.invoice.date,
+      invoiceValue: req.invoice.value,
+      shprName: req.shipper.name,
+      shprEmail: req.shipper.email,
+      shprMobile: req.shipper.mobile,
+      shprAddress: req.shipper.address,
+      shprAddressType: req.shipper.address_type,
+      shprCity: req.shipper.city,
+      shprState: req.shipper.state,
+      shprPincode: req.shipper.pincode,
+      shprCountry: req.shipper.country,
+      consName: req.consignee.name,
+      consEmail: req.consignee.email,
+      consMobile: req.consignee.mobile,
+      consAddress: req.consignee.address,
+      consAddressType: req.consignee.address_type,
+      consCity: req.consignee.city,
+      consState: req.consignee.state,
+      consPincode: req.consignee.pincode,
+      consCountry: req.consignee.country,
+      rtnName: req.return_address.name,
+      rtnEmail: req.return_address.email,
+      rtnMobile: req.return_address.mobile,
+      rtnAddress: req.return_address.address,
+      rtnAddressType: req.return_address.address_type,
+      rtnCity: req.return_address.city,
+      rtnState: req.return_address.state,
+      rtnPincode: req.return_address.pincode,
+      rtnCountry: req.return_address.country,
+      orderNumber: req.order_id,
+      pieces: req.item_quantity,
     };
 
     logger.info('UrbaneBolt: creating order', { externalOrderId: req.order_id });
 
     const resp = await this.http.post<{
-      data?: Array<{ awb?: string; order_id?: string; reference_number?: string }>;
+      successResponse?: Array<{ awbNumber?: number | string; orderNumber?: string }>;
+      errorResponse?: Array<{ status?: string; message?: string }>;
     }>('/services/manifest/', [payload]);
 
     const raw = resp.data as Record<string, unknown>;
-    const entry = resp.data?.data?.[0];
+    const entry = resp.data?.successResponse?.[0];
+    const awb = entry?.awbNumber ? String(entry.awbNumber) : undefined;
 
-    if (!entry?.awb) {
+    if (!entry || !awb) {
       throw new Error(`UrbaneBolt manifest response missing AWB. Raw: ${JSON.stringify(raw)}`);
     }
 
     return {
-      courierOrderId: entry.order_id ?? entry.reference_number ?? entry.awb,
-      awbNumber: entry.awb,
+      courierOrderId: entry.orderNumber ?? awb,
+      awbNumber: awb,
       rawResponse: raw,
     };
   }

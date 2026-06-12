@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { type CourierProvider } from '@database/entities';
+import { type CourierProvider, type UrbaneBoltConfig } from '@database/entities';
 import { CourierAuthError } from '@shared/errors';
 import { logger } from '@shared/logger';
 import { type ITokenManager } from '@shared/http.client';
@@ -54,12 +54,13 @@ export class UrbaneBoltTokenManager implements ITokenManager {
   }
 
   private async doRefresh(): Promise<void> {
-    const creds = this.provider.authCredentials;
+    const config = this.provider.courierConfig as UrbaneBoltConfig | null;
+    const creds = config?.authCredentials;
     if (!creds?.username || !creds?.password) {
       throw new CourierAuthError(this.provider.code, 'Missing UrbaneBolt credentials in DB');
     }
 
-    const authUrl = `${this.provider.baseUrl}${this.provider.authEndpoint}`;
+    const authUrl = `${this.provider.baseUrl}${config?.authEndpoint || ''}`;
 
     try {
       logger.info('UrbaneBolt: fetching auth token', { courierPartner: 'urbanebolt' });
@@ -70,8 +71,11 @@ export class UrbaneBoltTokenManager implements ITokenManager {
         { timeout: this.provider.timeoutMs },
       );
 
-      // UrbaneBolt returns token in either resp.data.data.token or resp.data.token
-      const token = resp.data?.data?.token ?? (resp.data as Record<string, unknown>)?.token;
+      // UrbaneBolt returns token in resp.data.data.token, resp.data.token, or resp.data.access_token
+      const token =
+        resp.data?.data?.token ??
+        (resp.data as Record<string, unknown>)?.token ??
+        (resp.data as Record<string, unknown>)?.access_token;
 
       if (!token || typeof token !== 'string') {
         throw new Error('Token not found in auth response');

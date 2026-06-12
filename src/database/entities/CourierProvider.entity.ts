@@ -4,13 +4,44 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  type ValueTransformer,
 } from 'typeorm';
+import { CryptoUtils } from '@shared/utils/crypto';
 
 export enum CourierAuthType {
   BEARER_TOKEN = 'BEARER_TOKEN',
   API_KEY = 'API_KEY',
   NONE = 'NONE',
 }
+
+export interface UrbaneBoltConfig {
+  authType: CourierAuthType.BEARER_TOKEN;
+  authEndpoint: string;
+  authCredentials: {
+    username: string;
+    password?: string;
+  };
+  customerCode?: string;
+}
+
+export interface MockCourierConfig {
+  authType: CourierAuthType.NONE;
+  authEndpoint?: null;
+  authCredentials?: null;
+}
+
+export type CourierConfig = UrbaneBoltConfig | MockCourierConfig | Record<string, unknown>;
+
+export const credentialsTransformer: ValueTransformer = {
+  to(value: unknown) {
+    if (!value) return value;
+    return CryptoUtils.encrypt(value);
+  },
+  from(value: unknown) {
+    if (!value) return value;
+    return CryptoUtils.decrypt(value);
+  },
+};
 
 @Entity('courier_providers')
 export class CourierProvider {
@@ -30,18 +61,12 @@ export class CourierProvider {
   baseUrl!: string;
 
   @Column({
-    type: 'enum',
-    enum: CourierAuthType,
-    default: CourierAuthType.BEARER_TOKEN,
-    name: 'auth_type',
+    type: 'jsonb',
+    name: 'courier_config',
+    nullable: true,
+    transformer: credentialsTransformer,
   })
-  authType!: CourierAuthType;
-
-  @Column({ type: 'varchar', length: 255, nullable: true, name: 'auth_endpoint' })
-  authEndpoint!: string | null;
-
-  @Column({ type: 'jsonb', nullable: true, name: 'auth_credentials' })
-  authCredentials!: Record<string, string> | null;
+  courierConfig!: CourierConfig | null;
 
   @Column({ type: 'int', default: 10000, name: 'timeout_ms' })
   timeoutMs!: number;
@@ -57,9 +82,6 @@ export class CourierProvider {
 
   @Column({ type: 'int', default: 30000, name: 'max_backoff_ms' })
   maxBackoffMs!: number;
-
-  @Column({ type: 'jsonb', nullable: true, name: 'extra_config' })
-  extraConfig!: Record<string, unknown> | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

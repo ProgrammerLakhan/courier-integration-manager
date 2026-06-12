@@ -43,6 +43,32 @@ Server starts on `http://localhost:3000`. Check `GET /health`.
 
 ---
 
+## Testing
+
+An E2E integration test suite is included to verify all routes, authorization levels, rate limiting, and courier integrations (both Mock and UrbaneBolt).
+
+### Prerequisites for E2E Tests
+1. Make sure your local infrastructure services (PostgreSQL and Redis) are running.
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+### Running the E2E Integration Tests
+In a separate terminal, execute:
+```bash
+npm run test:e2e
+```
+
+This verifies:
+- Health check validation
+- Authentication and RBAC (restricted register, admin, and ops access)
+- Order creation (Mock Courier and UrbaneBolt UAT API integration)
+- Tracking and cancellation flows
+- Database configuration encryption/decryption checks
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |

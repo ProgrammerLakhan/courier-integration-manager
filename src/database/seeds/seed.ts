@@ -27,57 +27,62 @@ async function seed(): Promise<void> {
     process.stdout.write(`ℹ️  Admin user already exists: ${config.admin.email}\n`);
   }
 
-  // Seed UrbaneBolt courier provider
-  const existingUB = await courierRepo.findOne({ where: { code: 'urbanebolt' } });
-  if (!existingUB) {
-    const ub = courierRepo.create({
-      code: 'urbanebolt',
-      displayName: 'UrbaneBolt',
-      isActive: true,
-      baseUrl: process.env.URBANEBOLT_BASE_URL ?? 'https://uat.urbanebolt.in/api/v1',
+  // Seed UrbaneBolt provider
+  const existingUb = await courierRepo.findOne({ where: { code: 'urbanebolt' } });
+  const ubData = {
+    code: 'urbanebolt',
+    displayName: 'UrbaneBolt',
+    isActive: true,
+    baseUrl: process.env.URBANEBOLT_BASE_URL ?? 'https://uat.urbanebolt.in/api/v1',
+    courierConfig: {
       authType: CourierAuthType.BEARER_TOKEN,
       authEndpoint: '/auth/getToken/',
       authCredentials: {
         username: process.env.URBANEBOLT_USERNAME ?? 'info@urbanebolt.com',
         password: process.env.URBANEBOLT_PASSWORD ?? 'EKIcygsLVV5RCtPZ',
       },
-      timeoutMs: 10000,
-      maxRetries: 3,
-      retryBackoffMs: 1000,
-      retryBackoffMultiplier: 2.0,
-      maxBackoffMs: 30000,
-      extraConfig: {
-        customerCode: process.env.URBANEBOLT_CUSTOMER_CODE ?? 'UEBCUS0008',
-      },
-    });
+      customerCode: process.env.URBANEBOLT_CUSTOMER_CODE ?? 'UEBCUS0008',
+    },
+    timeoutMs: 10000,
+    maxRetries: 3,
+    retryBackoffMs: 1000,
+    retryBackoffMultiplier: 2.0,
+    maxBackoffMs: 30000,
+  };
+  if (!existingUb) {
+    const ub = courierRepo.create(ubData);
     await courierRepo.save(ub);
     process.stdout.write('✅ UrbaneBolt courier provider seeded\n');
   } else {
-    process.stdout.write('ℹ️  UrbaneBolt courier provider already exists\n');
+    Object.assign(existingUb, ubData);
+    await courierRepo.save(existingUb);
+    process.stdout.write('✅ UrbaneBolt courier provider updated\n');
   }
 
   // Seed MockCourier provider
   const existingMock = await courierRepo.findOne({ where: { code: 'mock' } });
-  if (!existingMock) {
-    const mock = courierRepo.create({
-      code: 'mock',
-      displayName: 'Mock Courier (Testing)',
-      isActive: true,
-      baseUrl: 'http://mock-courier.internal',
+  const mockData = {
+    code: 'mock',
+    displayName: 'Mock Courier (Testing)',
+    isActive: true,
+    baseUrl: 'http://mock-courier.internal',
+    courierConfig: {
       authType: CourierAuthType.NONE,
-      authEndpoint: null,
-      authCredentials: null,
-      timeoutMs: 5000,
-      maxRetries: 1,
-      retryBackoffMs: 500,
-      retryBackoffMultiplier: 1.5,
-      maxBackoffMs: 5000,
-      extraConfig: {},
-    });
+    },
+    timeoutMs: 5000,
+    maxRetries: 1,
+    retryBackoffMs: 500,
+    retryBackoffMultiplier: 1.5,
+    maxBackoffMs: 5000,
+  };
+  if (!existingMock) {
+    const mock = courierRepo.create(mockData);
     await courierRepo.save(mock);
     process.stdout.write('✅ MockCourier provider seeded\n');
   } else {
-    process.stdout.write('ℹ️  MockCourier provider already exists\n');
+    Object.assign(existingMock, mockData);
+    await courierRepo.save(existingMock);
+    process.stdout.write('✅ MockCourier provider updated\n');
   }
 
   await AppDataSource.destroy();

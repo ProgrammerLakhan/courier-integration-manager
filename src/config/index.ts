@@ -24,6 +24,7 @@ export const config = {
     username: optional('DB_USER', 'courier_user'),
     password: optional('DB_PASSWORD', 'courier_pass'),
     database: optional('DB_NAME', 'courier_db'),
+    encryptionKey: optional('DB_ENCRYPTION_KEY', 'super-secret-db-encryption-key-fallback-32b'),
   },
 
   redis: {
