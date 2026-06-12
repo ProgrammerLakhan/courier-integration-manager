@@ -4,6 +4,16 @@ A production-grade backend service providing a **unified, courier-agnostic REST 
 
 ---
 
+## System Architecture
+
+### 1. Architecture Flow
+![Architecture Flow](./docs/architecture_flow.png)
+
+### 2. Order Creation Sequence (Single vs. Bulk)
+![Order Creation Sequence](./docs/order_creation_sequence.png)
+
+---
+
 ## Quick Start
 
 ### Prerequisites

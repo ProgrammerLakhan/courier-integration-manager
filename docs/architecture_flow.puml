@@ -1,0 +1,67 @@
+@startuml Architecture Flow
+skinparam monochrome false
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+title Multi-Courier Integration Platform - Architecture Flow
+
+actor "OPS / Client User" as User
+
+package "HTTP Layer" {
+  [Express Router] as Router
+  [Auth Middleware] as Auth
+  [Rate Limiter] as RateLimit
+  [Order Controller] as Controller
+}
+
+package "Core Service Layer" {
+  [Order Service] as OrderService
+  [Bulk Order Service] as BulkService
+}
+
+package "Queue & Background Workers" {
+  queue "BullMQ Redis Queue" as Queue
+  [Bulk Order Worker] as Worker
+}
+
+package "Integration Layer" {
+  [Courier Factory] as Factory
+  [UrbaneBolt Adapter] as UBAdapter
+  [Mock Courier Adapter] as MockAdapter
+}
+
+database "PostgreSQL" as DB
+database "Redis (BullMQ Store)" as RedisDB
+
+User --> Router : POST /api/v1/orders (Single or Bulk)
+Router --> Auth : Validate JWT & Role (RBAC)
+Auth --> RateLimit : Check Rate Limits
+RateLimit --> Controller : Forward Request
+
+Controller --> OrderService : Create Single Order
+Controller --> BulkService : Create Bulk Order
+
+' Single Order Flow
+OrderService --> DB : Create Order (Status: PENDING)
+OrderService --> Factory : Get Adapter (e.g. 'urbanebolt')
+Factory --> UBAdapter : Instantiate & Route
+UBAdapter --> DB : Retrieve Config (Decrypted via ValueTransformer)
+UBAdapter --> "UrbaneBolt API" : Send HTTP Payload
+UBAdapter <-- "UrbaneBolt API" : AWB & Status Response
+OrderService <-- UBAdapter : Normalized response
+OrderService --> DB : Update Order (Status: CREATED / FAILED, save AWB)
+User <-- Controller : 201 Created (AWB, Order Details)
+
+' Bulk Order Flow
+BulkService --> DB : Create Batch Job (Status: PROCESSING)
+BulkService --> Queue : Enqueue Jobs
+Queue --> RedisDB : Persist Jobs
+User <-- Controller : 202 Accepted (Batch ID)
+
+' Worker Background Flow
+Worker --> Queue : Fetch Job
+Worker --> OrderService : Process Single Order from Batch
+OrderService --> Factory : Get Adapter & Dispatch
+Worker --> DB : Update Batch Progress (Success / Failure counts)
+
+@enduml
